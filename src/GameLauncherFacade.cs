@@ -163,7 +163,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
     /// 运行时注意：jni4net.j-0.8.8.0.jar必须和jni4net.n-0.8.8.0.dll在同一目录下
     /// GameLauncherFacade调用方法：见Main函数
     /// </remarks>
-    public class GameLauncherFacade
+    public class GameLauncherFacade : IDisposable
     {
         private JavaClass facadeClass;
         private net.sf.jni4net.jni.JNIEnv jvm;
@@ -174,7 +174,6 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
 
         private const string coreJarFileName = "mkhx.core-1.0-jar-with-dependencies.jar";
         private const string coreJarVersionFileName = "mkhx.core.version.txt";
-        private const string coreJarRemoteBaseUrl = "http://www.mkhx.cc/resources/lib/corejar";
 
         public delegate void LoggingEventHandler(object sender, LoggingEventArgs args);
         private event LoggingEventHandler Logging;
@@ -187,7 +186,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
             }
         }
 
-        public void Initialize(bool tryUpdateCoreJar)
+        public void Initialize(bool tryUpdateCoreJar, string coreJarRemoteBaseUrl = "http://www.mkhx.cc/resources/lib/corejar")
         {
             OnLogging(TraceLevel.Info, string.Format("Initializing GameLauncherFacade...tryUpdateCoreJar = {0}", tryUpdateCoreJar));
             var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -225,6 +224,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                         var remoteVerUrl = coreJarRemoteBaseUrl + "/" + coreJarVersionFileName;
                         OnLogging(TraceLevel.Info, string.Format("Downloading version file from {0}...", remoteVerUrl));
                         var latestVerText = client.DownloadString(remoteVerUrl);
+                        OnLogging(TraceLevel.Info, "Done!");
                         long latestVer = int.MaxValue;
                         if (!long.TryParse(latestVerText, out latestVer))
                         {
@@ -237,9 +237,11 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                             var remoteCoreJarUrl = coreJarRemoteBaseUrl + "/" + coreJarFileName;
                             OnLogging(TraceLevel.Info, string.Format("Downloading core jar file from {0}...", remoteCoreJarUrl));
                             client.DownloadFile(remoteCoreJarUrl, jarPath);
+                            OnLogging(TraceLevel.Info, "Done!");
                             var remoteCoreJarVerFileUrl = coreJarRemoteBaseUrl + "/" + coreJarVersionFileName;
                             OnLogging(TraceLevel.Info, string.Format("Downloading core jar version file from {0}...", remoteCoreJarVerFileUrl));
                             client.DownloadFile(remoteCoreJarVerFileUrl, verPath);
+                            OnLogging(TraceLevel.Info, "Done!");
                         }
                         else
                         {
@@ -263,6 +265,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
             this.jvm = net.sf.jni4net.Bridge.CreateJVM(setup);
             this.facadeClass = this.jvm.FindClass("cfvbaibai/cardfantasy/game/launcher/GameLauncherFacade");
             OnLogging(TraceLevel.Info, "JVM initialized!");
+            OnLogging(TraceLevel.Info, "Facade is fully initialized.");
         }
 
         private void CheckInitialization()
@@ -272,6 +275,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                 throw new InvalidOperationException("Facade has not been initialized yet.");
             }
         }
+
         public ArenaGameResult PlayArenaGame(
             string deck1, string deck2, int heroLv1, int heroLv2,
             int p1CardAtBuff, int p1CardHpBuff, int p1HeroHpBuff,
@@ -327,72 +331,99 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
         {
             try
             {
-                var facade = new GameLauncherFacade();
-                facade.Logging += (sender, e) => Console.WriteLine("[{0}] {1}", e.Level, e.Message);
-                facade.Initialize(true);
-                var result = facade.PlayArenaGame(
-                    deck1: "凤凰",
-                    deck2: "凤凰",
-                    heroLv1: 50,
-                    heroLv2: 50,
-                    p1CardAtBuff: 100,      // 玩家1的卡牌攻击BUFF，百分比数
-                    p1CardHpBuff: 100,      // 玩家1的卡牌体力BUFF，百分比数
-                    p1HeroHpBuff: 100,      // 玩家1的英雄体力BUFF，百分比数
-                    p2CardAtBuff: 100,      // 玩家2的卡牌攻击BUFF，百分比数
-                    p2CardHpBuff: 100,      // 玩家2的卡牌体力BUFF，百分比数
-                    p2HeroHpBuff: 100,      // 玩家2的英雄体力BUFF，百分比数
-                    firstAttack: FirstAttack.Player1,
-                    deckOrder: DeckOrder.Random,
-                    vc1Text: "Any",         // 玩家1的特殊胜利条件设置，参见http://localhost:8080/mkhx/#help
-                    gameCount: 10
-                );
-                Console.WriteLine(result.ValidationResult);
-                Console.WriteLine(result.Player1Win);
-                Console.WriteLine(result.Player2Win);
-                Console.WriteLine("================");
-                var bossGameResult = facade.PlayBossGame(
-                    playerDeck: "凤凰*10",
-                    bossName: "网页版复仇女神",    // 魔神名字参见http://localhost:8080/mkhx/#boss-battle，包括各个版本的不同魔神
-                    heroLv: 50,
-                    kingdomBuff: 10,        // 玩家王国军团种族加成等级
-                    forestBuff: 10,         // 玩家森林军团种族加成等级
-                    savageBuff: 10,         // 玩家蛮荒军团种族加成等级
-                    hellBuff: 10,           // 玩家地狱军团种族加成等级
-                    guardType: BossGuardType.NormalGuard,
-                    gameCount: 20
-                );
-                Console.WriteLine(bossGameResult.ValidationResult);
-                Console.WriteLine(bossGameResult.AvgDamage);
-                Console.WriteLine(bossGameResult.CvDamage);
-                Console.WriteLine("================");
-                var mapGameResult = facade.playMapGame(
-                    playerDeck: "精灵法师*10",
-                    mapName: "5-5-3",
-                    heroLv: 50,
-                    gameCount: 100);
-                Console.WriteLine(mapGameResult.ValidationResult);
-                Console.WriteLine(mapGameResult.WinCount);
-                Console.WriteLine(mapGameResult.AdvWinCount);
-                Console.WriteLine("================");
-                var lilithGameResult = facade.playLilithGame(
-                    playerDeck: "凤凰*10",
-                    lilithName: "困难莉莉丝+陷阱3",       // 莉莉丝识别名，使用【<难度>莉莉丝+<第四技能>】的形式
-                    heroLv: 50,
-                    gameType: LilithGameType.RushBoss,
-                    remainingGuard: 5,                  // 清兵模式下指定清到还剩几个敌方卡牌为止（包括莉莉丝），设置为0表示清兵+尾刀
-                    remainingHp: 5000,                  // 尾刀模式下指定莉莉丝剩余体力
-                    eventCardNames: "凤凰,金属巨龙",      // 以半角逗号分隔的活动卡牌名称列表
-                    gameCount: 100);
-                Console.WriteLine(lilithGameResult.ValidationResult);
-                Console.WriteLine(lilithGameResult.AvgBattleCount);
-                Console.WriteLine(lilithGameResult.AvgDamageToLilith);
-                Console.WriteLine("================");
-                return 0;
+                using (var facade = new GameLauncherFacade())
+                {
+                    facade.Logging += (sender, e) => Console.WriteLine("[{0}] {1}", e.Level, e.Message);
+                    facade.Initialize(true);
+                    var result = facade.PlayArenaGame(
+                        deck1: "凤凰",
+                        deck2: "凤凰",
+                        heroLv1: 50,
+                        heroLv2: 50,
+                        p1CardAtBuff: 100,      // 玩家1的卡牌攻击BUFF，百分比数
+                        p1CardHpBuff: 100,      // 玩家1的卡牌体力BUFF，百分比数
+                        p1HeroHpBuff: 100,      // 玩家1的英雄体力BUFF，百分比数
+                        p2CardAtBuff: 100,      // 玩家2的卡牌攻击BUFF，百分比数
+                        p2CardHpBuff: 100,      // 玩家2的卡牌体力BUFF，百分比数
+                        p2HeroHpBuff: 100,      // 玩家2的英雄体力BUFF，百分比数
+                        firstAttack: FirstAttack.Player1,
+                        deckOrder: DeckOrder.Random,
+                        vc1Text: "Any",         // 玩家1的特殊胜利条件设置，参见http://localhost:8080/mkhx/#help
+                        gameCount: 10
+                    );
+                    Console.WriteLine(result.ValidationResult);
+                    Console.WriteLine(result.Player1Win);
+                    Console.WriteLine(result.Player2Win);
+                    Console.WriteLine("================");
+                    var bossGameResult = facade.PlayBossGame(
+                        playerDeck: "凤凰*10",
+                        bossName: "网页版复仇女神",    // 魔神名字参见http://localhost:8080/mkhx/#boss-battle，包括各个版本的不同魔神
+                        heroLv: 50,
+                        kingdomBuff: 10,        // 玩家王国军团种族加成等级
+                        forestBuff: 10,         // 玩家森林军团种族加成等级
+                        savageBuff: 10,         // 玩家蛮荒军团种族加成等级
+                        hellBuff: 10,           // 玩家地狱军团种族加成等级
+                        guardType: BossGuardType.NormalGuard,
+                        gameCount: 20
+                    );
+                    Console.WriteLine(bossGameResult.ValidationResult);
+                    Console.WriteLine(bossGameResult.AvgDamage);
+                    Console.WriteLine(bossGameResult.CvDamage);
+                    Console.WriteLine("================");
+                    var mapGameResult = facade.playMapGame(
+                        playerDeck: "精灵法师*10",
+                        mapName: "5-5-3",
+                        heroLv: 50,
+                        gameCount: 100);
+                    Console.WriteLine(mapGameResult.ValidationResult);
+                    Console.WriteLine(mapGameResult.WinCount);
+                    Console.WriteLine(mapGameResult.AdvWinCount);
+                    Console.WriteLine("================");
+                    var lilithGameResult = facade.playLilithGame(
+                        playerDeck: "凤凰*10",
+                        lilithName: "困难莉莉丝+陷阱3",       // 莉莉丝识别名，使用【<难度>莉莉丝+<第四技能>】的形式
+                        heroLv: 50,
+                        gameType: LilithGameType.RushBoss,
+                        remainingGuard: 5,                  // 清兵模式下指定清到还剩几个敌方卡牌为止（包括莉莉丝），设置为0表示清兵+尾刀
+                        remainingHp: 5000,                  // 尾刀模式下指定莉莉丝剩余体力
+                        eventCardNames: "凤凰,金属巨龙",      // 以半角逗号分隔的活动卡牌名称列表
+                        gameCount: 100);
+                    Console.WriteLine(lilithGameResult.ValidationResult);
+                    Console.WriteLine(lilithGameResult.AvgBattleCount);
+                    Console.WriteLine(lilithGameResult.AvgDamageToLilith);
+                    Console.WriteLine("================");
+                    return 0;
+                }
             }
             catch (System.Exception e)
             {
                 Console.WriteLine(e.ToString() + e.StackTrace);
                 return 1;
+            }
+        }
+
+        public void Dispose()
+        {
+            this.Dispose(true);
+        }
+
+        ~GameLauncherFacade()
+        {
+            this.Dispose(false);
+        }
+
+        private bool disposed;
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!this.disposed)
+            {
+                if (this.jvm != null)
+                {
+                    OnLogging(TraceLevel.Info, "Destryoing JVM...");
+                    this.jvm.GetJavaVM().DestroyJavaVM();
+                    OnLogging(TraceLevel.Info, "JVM destroyed.");
+                }
+                this.disposed = true;
             }
         }
     }
