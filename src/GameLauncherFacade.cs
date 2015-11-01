@@ -348,7 +348,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                         p2HeroHpBuff: 100,      // 玩家2的英雄体力BUFF，百分比数
                         firstAttack: FirstAttack.Player1,
                         deckOrder: DeckOrder.Random,
-                        vc1Text: "Any",         // 玩家1的特殊胜利条件设置，参见http://localhost:8080/mkhx/#help
+                        vc1Text: "Any",         // 玩家1的特殊胜利条件设置，参见http://www.mkhx.cc#help
                         gameCount: 10
                     );
                     Console.WriteLine(result.ValidationResult);
@@ -357,7 +357,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                     Console.WriteLine("================");
                     var bossGameResult = facade.PlayBossGame(
                         playerDeck: "凤凰*10",
-                        bossName: "网页版复仇女神",    // 魔神名字参见http://localhost:8080/mkhx/#boss-battle，包括各个版本的不同魔神
+                        bossName: "网页版复仇女神",    // 魔神名字参见http://www.mkhx.cc#boss-battle，包括各个版本的不同魔神
                         heroLv: 50,
                         kingdomBuff: 10,        // 玩家王国军团种族加成等级
                         forestBuff: 10,         // 玩家森林军团种族加成等级
