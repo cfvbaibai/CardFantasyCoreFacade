@@ -186,7 +186,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
             }
         }
 
-        public void Initialize(bool tryUpdateCoreJar, string coreJarRemoteBaseUrl = "http://www.mkhx.cc/resources/lib/corejar")
+        public void Initialize(bool tryUpdateCoreJar, string coreJarRemoteBaseUrl = "http://www.mkhx.cc/resources/lib/corejar", string javaHome = null)
         {
             OnLogging(TraceLevel.Info, string.Format("Initializing GameLauncherFacade...tryUpdateCoreJar = {0}", tryUpdateCoreJar));
             var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -261,6 +261,10 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
 
             OnLogging(TraceLevel.Info, "Initializing JVM...");
             var setup = new net.sf.jni4net.BridgeSetup();
+            if (!string.IsNullOrEmpty(javaHome))
+            {
+                setup.JavaHome = javaHome;
+            }
             setup.AddClassPath(jarPath);
             this.jvm = net.sf.jni4net.Bridge.CreateJVM(setup);
             this.facadeClass = this.jvm.FindClass("cfvbaibai/cardfantasy/game/launcher/GameLauncherFacade");
