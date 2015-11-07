@@ -171,6 +171,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
         private const string sigPlayBossGame = "(Ljava/lang/String;Ljava/lang/String;IIIIIII)Ljava/lang/String;";
         private const string sigPlayMapGame = "(Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;";
         private const string sigPlayLilithGame = "(Ljava/lang/String;Ljava/lang/String;IIIILjava/lang/String;I)Ljava/lang/String;";
+        private const string sigPlayCustomLilithGame = "(Ljava/lang/String;Ljava/lang/String;IIIIIILjava/lang/String;I)Ljava/lang/String;";
 
         private const string coreJarFileName = "mkhx.core-1.0-jar-with-dependencies.jar";
         private const string coreJarVersionFileName = "mkhx.core.version.txt";
@@ -186,7 +187,7 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
             }
         }
 
-        public void Initialize(bool tryUpdateCoreJar, string coreJarRemoteBaseUrl = "http://www.mkhx.cc/resources/lib/corejar", string javaHome = null)
+        public void Initialize(bool tryUpdateCoreJar = true, string coreJarRemoteBaseUrl = "http://www.mkhx.cc/resources/lib/corejar", string javaHome = null)
         {
             OnLogging(TraceLevel.Info, string.Format("Initializing GameLauncherFacade...tryUpdateCoreJar = {0}", tryUpdateCoreJar));
             var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -222,13 +223,21 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                     try
                     {
                         var remoteVerUrl = coreJarRemoteBaseUrl + "/" + coreJarVersionFileName;
-                        OnLogging(TraceLevel.Info, string.Format("Downloading version file from {0}...", remoteVerUrl));
-                        var latestVerText = client.DownloadString(remoteVerUrl);
-                        OnLogging(TraceLevel.Info, "Done!");
-                        long latestVer = int.MaxValue;
-                        if (!long.TryParse(latestVerText, out latestVer))
+                        long latestVer = long.MaxValue;
+                        try
                         {
-                            OnLogging(TraceLevel.Warning, string.Format("Server returns an invalid core jar file version: {0}. Force update...", latestVerText));
+                            OnLogging(TraceLevel.Info, string.Format("Downloading version file from {0}...", remoteVerUrl));
+                            var latestVerText = client.DownloadString(remoteVerUrl);
+                            OnLogging(TraceLevel.Info, "Done!");
+                            if (!long.TryParse(latestVerText, out latestVer))
+                            {
+                                OnLogging(TraceLevel.Warning, string.Format("Server returns an invalid core jar file version: {0}. Force update...", latestVerText));
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            OnLogging(TraceLevel.Error, string.Format("Failed to get remote core jar version: {0}", e));
+                            OnLogging(TraceLevel.Info, "Force update!");
                         }
                         OnLogging(TraceLevel.Info, string.Format("Remote core jar version: {0}", latestVer));
                         if (!jarExists || existingVer < latestVer)
@@ -331,14 +340,25 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
             return result;
         }
 
+        public LilithGameResult playCustomLilithGame(string playerDeck, string lilithDeck, int heroLv, int lilithCardAtBuff, int lilithCardHpBuff,
+            LilithGameType gameType, int remainingGuard, int remainingHp, string eventCardNames, int gameCount)
+        {
+            CheckInitialization();
+            object[] args = new object[] { playerDeck, lilithDeck, heroLv, lilithCardAtBuff, lilithCardHpBuff, (int)gameType, remainingGuard, remainingHp, eventCardNames, gameCount };
+            var resultText = jvm.CallStaticMethod<java.lang.String>(facadeClass, "playCustomLilithGame", sigPlayCustomLilithGame, args);
+            var result = JsonConvert.DeserializeObject<LilithGameResult>(resultText);
+            return result;
+        }
+
         public static int Main(string[] args)
         {
-            try
+            using (var facade = new GameLauncherFacade())
             {
-                using (var facade = new GameLauncherFacade())
+                try
                 {
                     facade.Logging += (sender, e) => Console.WriteLine("[{0}] {1}", e.Level, e.Message);
-                    facade.Initialize(true);
+                    facade.Initialize();
+                    Console.WriteLine("Testing Arena game...");
                     var result = facade.PlayArenaGame(
                         deck1: "凤凰",
                         deck2: "凤凰",
@@ -355,10 +375,12 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                         vc1Text: "Any",         // 玩家1的特殊胜利条件设置，参见http://www.mkhx.cc#help
                         gameCount: 10
                     );
-                    Console.WriteLine(result.ValidationResult);
-                    Console.WriteLine(result.Player1Win);
-                    Console.WriteLine(result.Player2Win);
+                    Console.WriteLine("ValidationResult: {0}", result.ValidationResult);
+                    Console.WriteLine("Player1Win: {0}", result.Player1Win);
+                    Console.WriteLine("Player2Win: {0}", result.Player2Win);
+
                     Console.WriteLine("================");
+                    Console.WriteLine("Testing Boss game...");
                     var bossGameResult = facade.PlayBossGame(
                         playerDeck: "凤凰*10",
                         bossName: "网页版复仇女神",    // 魔神名字参见http://www.mkhx.cc#boss-battle，包括各个版本的不同魔神
@@ -370,19 +392,23 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                         guardType: BossGuardType.NormalGuard,
                         gameCount: 20
                     );
-                    Console.WriteLine(bossGameResult.ValidationResult);
-                    Console.WriteLine(bossGameResult.AvgDamage);
-                    Console.WriteLine(bossGameResult.CvDamage);
+                    Console.WriteLine("ValidationResult: {0}", bossGameResult.ValidationResult);
+                    Console.WriteLine("Average Damage: {0}", bossGameResult.AvgDamage);
+                    Console.WriteLine("Damage CV: {0}", bossGameResult.CvDamage);
                     Console.WriteLine("================");
+
+                    Console.WriteLine("Testing Map game...");
                     var mapGameResult = facade.playMapGame(
-                        playerDeck: "精灵法师*10",
+                        playerDeck: "精灵法师*12",
                         mapName: "5-5-3",
                         heroLv: 50,
                         gameCount: 100);
-                    Console.WriteLine(mapGameResult.ValidationResult);
-                    Console.WriteLine(mapGameResult.WinCount);
-                    Console.WriteLine(mapGameResult.AdvWinCount);
+                    Console.WriteLine("ValidationResult: {0}", mapGameResult.ValidationResult);
+                    Console.WriteLine("WinCount: {0}", mapGameResult.WinCount);
+                    Console.WriteLine("AdvWinCount: {0}", mapGameResult.AdvWinCount);
                     Console.WriteLine("================");
+
+                    Console.WriteLine("Testing Lilith game...");
                     var lilithGameResult = facade.playLilithGame(
                         playerDeck: "凤凰*10",
                         lilithName: "困难莉莉丝+陷阱3",       // 莉莉丝识别名，使用【<难度>莉莉丝+<第四技能>】的形式
@@ -392,17 +418,36 @@ namespace Cfvbaibai.Cardfantasy.DotNetFacade
                         remainingHp: 5000,                  // 尾刀模式下指定莉莉丝剩余体力
                         eventCardNames: "凤凰,金属巨龙",      // 以半角逗号分隔的活动卡牌名称列表
                         gameCount: 100);
-                    Console.WriteLine(lilithGameResult.ValidationResult);
-                    Console.WriteLine(lilithGameResult.AvgBattleCount);
-                    Console.WriteLine(lilithGameResult.AvgDamageToLilith);
+                    Console.WriteLine("ValidationResult: {0}", lilithGameResult.ValidationResult);
+                    Console.WriteLine("AvgBattleCount: {0}", lilithGameResult.AvgBattleCount);
+                    Console.WriteLine("AvgDamageToLilith: {0}", lilithGameResult.AvgDamageToLilith);
                     Console.WriteLine("================");
+
+                    Console.WriteLine("Testing custom Lilith game...");
+                    var customLilithGameResult = facade.playCustomLilithGame(
+                        playerDeck: "凤凰*10",
+                        lilithDeck: "困难莉莉丝+法力反射10,金属巨龙+弱点攻击9",
+                        heroLv: 50,
+                        lilithCardAtBuff: 150,
+                        lilithCardHpBuff: 150,
+                        gameType: LilithGameType.ClearGuards,
+                        remainingGuard: 1,
+                        remainingHp: 0,
+                        eventCardNames: "凤凰",
+                        gameCount: 50
+                    );
+                    Console.WriteLine("ValidationResult: {0}", customLilithGameResult.ValidationResult);
+                    Console.WriteLine("AvgBattleCount: {0}", customLilithGameResult.AvgBattleCount);
+                    Console.WriteLine("AvgDamageToLilith: {0}", customLilithGameResult.AvgDamageToLilith);
+                    Console.WriteLine("================");
+
                     return 0;
                 }
-            }
-            catch (System.Exception e)
-            {
-                Console.WriteLine(e.ToString() + e.StackTrace);
-                return 1;
+                catch (System.Exception e)
+                {
+                    Console.WriteLine(e.ToString() + e.StackTrace);
+                    return 1;
+                }
             }
         }
 
